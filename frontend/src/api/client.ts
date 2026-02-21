@@ -7,8 +7,8 @@ function getApiBaseUrl(): string {
   }
   // If in browser, check if we're being served from the same port as the API
   if (typeof window !== 'undefined') {
-    // If we're on port 8000, assume API is on the same origin (relative path)
-    if (window.location.port === '8000') {
+    // If we're on port 8000 (served by backend), use relative path
+    if (window.location.port === '8000' || window.location.port === '') {
       return ''
     }
     // Otherwise use same host but port 8000

@@ -230,12 +230,13 @@ cd "$(dirname "$0")"
 pkill -f 'uvicorn.*main:app' 2>/dev/null || true
 pkill -f 'python.*-m http.server' 2>/dev/null || true
 pkill -f 'python.*backend/main.py' 2>/dev/null || true
+pkill -f 'python.*run_backend.py' 2>/dev/null || true
 sleep 1
 
 echo "启动 VyOS Web UI..."
 
-# 启动后端
-echo "  启动后端..."
+# 启动后端（同时提供前端静态文件）
+echo "  启动后端（含前端服务）..."
 cd backend
 
 # 设置PYTHONPATH
@@ -288,13 +289,7 @@ PYEND
     BACKEND_PID=$!
 fi
 
-# 启动前端
-echo "  启动前端..."
-cd ../frontend/dist
-python3 -m http.server 5173 --bind 0.0.0.0 > ../../frontend.log 2>&1 &
-FRONTEND_PID=$!
-
-cd ../..
+cd ..
 
 sleep 3
 
@@ -303,7 +298,6 @@ echo "========================================="
 echo "  启动尝试完成！"
 echo "========================================="
 echo "后端 PID: $BACKEND_PID"
-echo "前端 PID: $FRONTEND_PID"
 echo ""
 # 获取本机IP
 MY_IP=$(ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -1)
@@ -322,37 +316,30 @@ if [ -n "$BACKEND_PID" ] && ps -p $BACKEND_PID > /dev/null; then
 else
     echo "后端: 启动失败，请查看日志"
 fi
-if ps -p $FRONTEND_PID > /dev/null; then
-    echo "前端: 运行中"
-else
-    echo "前端: 启动失败，请查看日志"
-fi
 
 echo ""
 if [ $BACKEND_RUNNING -eq 1 ]; then
-    echo "访问地址: http://$MY_IP:5173"
-    echo "后端 API: http://$MY_IP:8000"
+    echo "访问地址: http://$MY_IP:8000"
     echo ""
     echo "默认登录: vyos / vyos"
 else
     echo "后端无法在VyOS上运行，推荐方案："
     echo "  1. 在部署机运行前后端服务"
     echo "  2. 用SSH端口转发访问："
-    echo "     ssh -L 5173:localhost:5173 -L 8000:localhost:8000 vyos@$MY_IP"
-    echo "  3. 然后浏览器访问: http://localhost:5173"
+    echo "     ssh -L 8000:localhost:8000 vyos@$MY_IP"
+    echo "  3. 然后浏览器访问: http://localhost:8000"
 fi
 echo ""
 echo "查看日志:"
-echo "  后端: tail -f backend.log"
-echo "  前端: tail -f frontend.log"
+echo "  tail -f backend.log"
 EOF
 
 # 停止脚本
 cat > stop.sh << 'EOF'
 #!/bin/bash
 echo "停止 VyOS Web UI..."
-pkill -f 'uvicorn.*main:app' 2>/dev/null && echo "  后端已停止" || echo "  后端未运行"
-pkill -f 'python.*-m http.server' 2>/dev/null && echo "  前端已停止" || echo "  前端未运行"
+pkill -f 'uvicorn.*main:app' 2>/dev/null && echo "  服务已停止" || echo "  服务未运行"
+pkill -f 'python.*-m http.server' 2>/dev/null
 pkill -f 'python.*backend/main.py' 2>/dev/null
 pkill -f 'python.*run_backend.py' 2>/dev/null
 echo "完成"
@@ -364,24 +351,18 @@ cat > status.sh << 'EOF'
 echo "VyOS Web UI 状态:"
 echo ""
 if pgrep -f 'uvicorn.*main:app' > /dev/null; then
-    echo "后端: 运行中 (PID: $(pgrep -f 'uvicorn.*main:app'))"
+    echo "服务: 运行中 (PID: $(pgrep -f 'uvicorn.*main:app'))"
 elif pgrep -f 'python.*run_backend.py' > /dev/null; then
-    echo "后端: 运行中 (PID: $(pgrep -f 'python.*run_backend.py'))"
+    echo "服务: 运行中 (PID: $(pgrep -f 'python.*run_backend.py'))"
 else
-    echo "后端: 未运行"
-fi
-if pgrep -f 'python.*-m http.server' > /dev/null; then
-    echo "前端: 运行中 (PID: $(pgrep -f 'python.*-m http.server'))"
-else
-    echo "前端: 未运行"
+    echo "服务: 未运行"
 fi
 echo ""
-if ss -tlnp 2>/dev/null | grep -q ':5173'; then
-    echo "端口 5173: 已监听"
-fi
 if ss -tlnp 2>/dev/null | grep -q ':8000'; then
     echo "端口 8000: 已监听"
 fi
+echo ""
+echo "访问地址: http://<VyOS-IP>:8000"
 EOF
 
 chmod +x start.sh stop.sh status.sh
