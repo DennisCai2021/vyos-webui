@@ -29,7 +29,7 @@ ENV/
 # Node
 node_modules/
 .DS_Store
-dist/
+# dist/  - 不忽略，提交构建好的前端到GitHub
 dist-ssr/
 *.local
 npm-debug.log*
