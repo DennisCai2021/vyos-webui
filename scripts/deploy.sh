@@ -45,28 +45,22 @@ else
     echo "前端已构建，跳过"
 fi
 
-# 创建可移植的Python环境
+# 确保本地有Python 3.11的venv
 echo ""
-echo "[2/7] 准备可移植Python环境..."
+echo "[2/7] 准备Python 3.11环境..."
 cd backend
-if [ ! -d "venv" ]; then
-    echo "创建本地venv..."
-    python3 -m venv venv
+if [ ! -d "venv" ] || [ ! -f "venv/bin/python3.11" ]; then
+    echo "创建Python 3.11 venv..."
+    rm -rf venv
+    if command -v python3.11 &> /dev/null; then
+        python3.11 -m venv venv
+    else
+        python3 -m venv venv
+    fi
 fi
 source venv/bin/activate
+python --version
 pip install -q -r requirements.txt
-
-# 创建一个可移植的启动脚本
-cat > venv/bin/python_portable << 'PYEOF'
-#!/bin/bash
-# 可移植Python启动器
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PYTHONHOME="$DIR/.."
-export PYTHONPATH="$DIR/../lib/python3.12/site-packages:$PYTHONPATH"
-exec /usr/bin/python3 "$@"
-PYEOF
-chmod +x venv/bin/python_portable
-
 echo "Python依赖已就绪"
 cd ..
 
@@ -140,8 +134,17 @@ CFGEOF
     # 修复符号链接
     cd venv/bin
     rm -f python python3 python3.12
-    ln -s /usr/bin/python3 python
-    ln -s /usr/bin/python3 python3
+    ln -sf /usr/bin/python3 python
+    ln -sf /usr/bin/python3 python3
+    if [ -x /usr/bin/python3.11 ]; then
+        ln -sf /usr/bin/python3.11 python3.11
+    fi
+    # 修复所有脚本的shebang
+    for f in *; do
+        if [ -f "$f" ] && [ -x "$f" ]; then
+            head -n 1 "$f" | grep -q "^#!" && sed -i '1s|^#!.*python.*|#!/usr/bin/python3|' "$f" 2>/dev/null || true
+        fi
+    done
     cd ../..
 fi
 
@@ -167,22 +170,26 @@ echo "  启动后端..."
 cd backend
 
 # 设置PYTHONPATH
-if [ -d "venv/lib/python3.12/site-packages" ]; then
-    export PYTHONPATH="$(pwd)/venv/lib/python3.12/site-packages:$(pwd)/venv/lib/python3.11/site-packages:$PYTHONPATH"
-elif [ -d "venv/lib/python3.11/site-packages" ]; then
+export PYTHONPATH=""
+if [ -d "venv/lib/python3.11/site-packages" ]; then
     export PYTHONPATH="$(pwd)/venv/lib/python3.11/site-packages:$PYTHONPATH"
 fi
+if [ -d "venv/lib/python3.12/site-packages" ]; then
+    export PYTHONPATH="$(pwd)/venv/lib/python3.12/site-packages:$PYTHONPATH"
+fi
 
-# 尝试多种方式启动
+# 尝试启动
+BACKEND_PID=""
 if [ -f "venv/bin/uvicorn" ]; then
     echo "    方式1: 使用venv uvicorn..."
-    sed -i '1s|.*|#!/usr/bin/python3|' venv/bin/uvicorn 2>/dev/null || true
     python3 venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
+    BACKEND_PID=$!
 elif python3 -c "import uvicorn" 2>/dev/null; then
     echo "    方式2: 使用系统uvicorn..."
     python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
+    BACKEND_PID=$!
 else
-    echo "    方式3: 尝试直接运行..."
+    echo "    方式3: 创建启动脚本..."
     cat > run_backend.py << 'PYEND'
 #!/usr/bin/env python3
 import sys
@@ -190,7 +197,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # 尝试添加site-packages
-for p in ['venv/lib/python3.12/site-packages', 'venv/lib/python3.11/site-packages']:
+for p in ['venv/lib/python3.11/site-packages', 'venv/lib/python3.12/site-packages']:
     sp = os.path.join(os.path.dirname(os.path.abspath(__file__)), p)
     if os.path.exists(sp):
         sys.path.insert(0, sp)
@@ -202,17 +209,15 @@ try:
 except ImportError as e:
     print(f"错误: {e}")
     print("")
-    print("Python依赖未安装，推荐方案：")
+    print("Python依赖有问题，请尝试以下方案：")
     print("1. 在部署机运行前后端服务")
-    print("2. 用SSH端口转发访问：")
-    print("   ssh -L 5173:localhost:5173 -L 8000:localhost:8000 vyos@<this-ip>")
-    print("3. 然后浏览器访问: http://localhost:5173")
+    print("2. 用SSH端口转发访问")
     sys.exit(1)
 PYEND
     chmod +x run_backend.py
     python3 run_backend.py > ../backend.log 2>&1 &
+    BACKEND_PID=$!
 fi
-BACKEND_PID=$!
 
 # 启动前端
 echo "  启动前端..."
@@ -241,8 +246,10 @@ if [ -z "$MY_IP" ]; then
 fi
 
 # 检查后端是否真的在运行
-if ps -p $BACKEND_PID > /dev/null; then
+BACKEND_RUNNING=0
+if [ -n "$BACKEND_PID" ] && ps -p $BACKEND_PID > /dev/null; then
     echo "后端: 运行中"
+    BACKEND_RUNNING=1
 else
     echo "后端: 启动失败，请查看日志"
 fi
@@ -253,13 +260,18 @@ else
 fi
 
 echo ""
-echo "如果后端无法在VyOS上运行，推荐方案："
-echo "  1. 在部署机运行前后端服务"
-echo "  2. 用SSH端口转发访问："
-echo "     ssh -L 5173:localhost:5173 -L 8000:localhost:8000 vyos@$MY_IP"
-echo "  3. 然后浏览器访问: http://localhost:5173"
-echo ""
-echo "默认登录: vyos / vyos"
+if [ $BACKEND_RUNNING -eq 1 ]; then
+    echo "访问地址: http://$MY_IP:5173"
+    echo "后端 API: http://$MY_IP:8000"
+    echo ""
+    echo "默认登录: vyos / vyos"
+else
+    echo "后端无法在VyOS上运行，推荐方案："
+    echo "  1. 在部署机运行前后端服务"
+    echo "  2. 用SSH端口转发访问："
+    echo "     ssh -L 5173:localhost:5173 -L 8000:localhost:8000 vyos@$MY_IP"
+    echo "  3. 然后浏览器访问: http://localhost:5173"
+fi
 echo ""
 echo "查看日志:"
 echo "  后端: tail -f backend.log"
@@ -311,9 +323,6 @@ echo "步骤 3/4: 尝试启动服务..."
 
 echo ""
 echo "步骤 4/4: 部署完成！"
-echo ""
-echo "如果VyOS上的后端无法运行（由于Python依赖问题），"
-echo "请使用部署机运行服务+SSH端口转发的方式。"
 
 REMOTE_SCRIPT
 
@@ -332,11 +341,7 @@ echo "========================================="
 echo ""
 echo "文件已部署到: $REMOTE_DIR"
 echo ""
-echo "请查看上面的输出，如果VyOS上的后端无法运行，"
-echo "推荐使用部署机运行服务，然后用SSH端口转发访问："
-echo ""
-echo "  ssh -L 5173:localhost:5173 -L 8000:localhost:8000 $VYOS_USER@$VYOS_HOST"
-echo "  浏览器访问: http://localhost:5173"
+echo "请查看上面的输出。"
 echo ""
 echo "VyOS上的管理命令:"
 echo "  启动: cd $REMOTE_DIR && ./start.sh"
