@@ -1,6 +1,6 @@
 #!/bin/bash
 # VyOS Web UI 一键部署脚本
-# 使用方法: ./scripts/deploy.sh [VyOS主机IP] [VyOS用户名] [VyOS密码]
+# 使用方法: ./scripts/deploy.sh [VyOS主机IP] [VyOS用户名] [VyOS密码] [--no-pull]
 
 set -e
 
@@ -9,12 +9,21 @@ VYOS_HOST="${1:-198.18.5.188}"
 VYOS_USER="${2:-vyos}"
 VYOS_PASS="${3:-vyos}"
 REMOTE_DIR="/opt/vyos-webui"
+NO_PULL=0
+
+# 检查参数
+if [ "$4" = "--no-pull" ]; then
+    NO_PULL=1
+fi
 
 echo "========================================="
 echo "  VyOS Web UI 一键部署"
 echo "========================================="
 echo "目标主机: $VYOS_HOST"
 echo "用户名: $VYOS_USER"
+if [ $NO_PULL -eq 1 ]; then
+    echo "模式: 跳过Git拉取（使用本地代码）"
+fi
 echo ""
 
 # 检查必要工具
@@ -30,8 +39,44 @@ check_tool ssh
 check_tool scp
 check_tool tar
 
+# 进入项目目录
+cd "$(dirname "$0")/.."
+PROJECT_DIR=$(pwd)
+
+# 从GitHub拉取最新代码
+if [ $NO_PULL -eq 0 ]; then
+    echo "[0/8] 从GitHub拉取最新代码..."
+    check_tool git
+
+    if [ -d ".git" ]; then
+        echo "检测到Git仓库，正在拉取最新代码..."
+        git fetch origin
+
+        # 获取当前分支
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        echo "当前分支: $CURRENT_BRANCH"
+
+        # 尝试拉取
+        if git pull origin "$CURRENT_BRANCH"; then
+            echo "代码已更新到最新版本"
+        else
+            echo "警告: Git拉取失败，将使用本地代码继续"
+        fi
+
+        # 显示最新commit
+        echo "最新提交: $(git log -1 --oneline)"
+    else
+        echo "警告: 不是Git仓库，跳过拉取步骤"
+    fi
+    echo ""
+fi
+
 # 构建前端（如果需要）
-echo "[1/7] 检查前端构建..."
+if [ $NO_PULL -eq 1 ]; then
+    echo "[1/7] 检查前端构建..."
+else
+    echo "[1/8] 检查前端构建..."
+fi
 cd "$(dirname "$0")/.."
 if [ ! -d "frontend/dist" ] || [ -z "$(ls -A frontend/dist)" ]; then
     echo "前端未构建，正在构建..."
@@ -47,8 +92,12 @@ fi
 
 # 确保本地有Python 3.11的venv
 echo ""
-echo "[2/7] 准备Python 3.11环境..."
-cd backend
+if [ $NO_PULL -eq 1 ]; then
+    echo "[2/7] 准备Python 3.11环境..."
+else
+    echo "[2/8] 准备Python 3.11环境..."
+fi
+cd "$PROJECT_DIR/backend"
 if [ ! -d "venv" ] || [ ! -f "venv/bin/python3.11" ]; then
     echo "创建Python 3.11 venv..."
     rm -rf venv
@@ -62,7 +111,6 @@ source venv/bin/activate
 python --version
 pip install -q -r requirements.txt
 echo "Python依赖已就绪"
-cd ..
 
 # 创建SSH命令
 SSH_CMD="sshpass -p $VYOS_PASS ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VYOS_USER@$VYOS_HOST"
@@ -70,13 +118,22 @@ SCP_CMD="sshpass -p $VYOS_PASS scp -o StrictHostKeyChecking=no -o ConnectTimeout
 
 # 1. 创建目标目录
 echo ""
-echo "[3/7] 创建远程目录..."
+if [ $NO_PULL -eq 1 ]; then
+    echo "[3/7] 创建远程目录..."
+else
+    echo "[3/8] 创建远程目录..."
+fi
 $SSH_CMD "sudo mkdir -p $REMOTE_DIR && sudo chown -R $VYOS_USER:users $REMOTE_DIR"
 
 # 2. 创建传输归档
 echo ""
-echo "[4/7] 打包文件..."
+if [ $NO_PULL -eq 1 ]; then
+    echo "[4/7] 打包文件..."
+else
+    echo "[4/8] 打包文件..."
+fi
 TMP_TAR="/tmp/vyos-webui-$(date +%Y%m%d%H%M%S).tar.gz"
+cd "$PROJECT_DIR"
 tar -czf "$TMP_TAR" \
     --exclude='.git' \
     --exclude='__pycache__' \
@@ -92,17 +149,29 @@ echo "已创建: $TMP_TAR"
 
 # 3. 传输文件
 echo ""
-echo "[5/7] 传输文件到VyOS..."
+if [ $NO_PULL -eq 1 ]; then
+    echo "[5/7] 传输文件到VyOS..."
+else
+    echo "[5/8] 传输文件到VyOS..."
+fi
 $SCP_CMD "$TMP_TAR" "$VYOS_USER@$VYOS_HOST:/tmp/"
 
 # 4. 解压文件
 echo ""
-echo "[6/7] 解压文件..."
+if [ $NO_PULL -eq 1 ]; then
+    echo "[6/7] 解压文件..."
+else
+    echo "[6/8] 解压文件..."
+fi
 $SSH_CMD "cd $REMOTE_DIR && tar -xzf /tmp/$(basename "$TMP_TAR") && rm -f /tmp/$(basename "$TMP_TAR")"
 
 # 5. 在VyOS上设置环境并启动
 echo ""
-echo "[7/7] 在VyOS上配置并启动服务..."
+if [ $NO_PULL -eq 1 ]; then
+    echo "[7/7] 在VyOS上配置并启动服务..."
+else
+    echo "[7/8] 在VyOS上配置并启动服务..."
+fi
 
 # 创建远程安装脚本
 cat << 'REMOTE_SCRIPT' > /tmp/vyos_install.sh
@@ -338,6 +407,9 @@ echo ""
 echo "========================================="
 echo "  部署脚本执行完成！"
 echo "========================================="
+if [ $NO_PULL -eq 0 ] && [ -d "$PROJECT_DIR/.git" ]; then
+    echo "部署版本: $(cd "$PROJECT_DIR" && git log -1 --oneline)"
+fi
 echo ""
 echo "文件已部署到: $REMOTE_DIR"
 echo ""

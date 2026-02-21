@@ -45,7 +45,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
     if len(hashed_password) == 64 and all(c in '0123456789abcdef' for c in hashed_password):
         return hmac.compare_digest(_simple_hash(plain_password), hashed_password)
-    return True
+    # For backward compatibility, also check if it's the same simple hash
+    return hmac.compare_digest(_simple_hash(plain_password), hashed_password)
 
 
 def get_password_hash(password: str) -> str:
