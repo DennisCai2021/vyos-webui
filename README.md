@@ -1,102 +1,103 @@
 # VyOS Web UI
 
-一个现代化的 VyOS 路由器 Web 管理界面，通过 Claude Code 配合模型 GLM4.7+Doubao-Seed-2.0-Code 开发。
+A modern web management interface for VyOS routers, developed with Claude Code and GLM4.7+Doubao-Seed-2.0-Code.
 
-## 项目概述
+[中文文档 (Chinese Documentation)](README_CN.md)
 
-本项目为 VyOS 路由器提供一个现代化的 Web 管理界面，支持真实的 VyOS 设备连接和配置管理。
+## Project Overview
 
-## 已实现的功能
+This project provides a modern web management interface for VyOS routers, supporting real VyOS device connection and configuration management.
 
-### 1. 系统信息
-- 系统版本、运行时间
-- CPU、内存、磁盘使用情况
-- 硬件信息
-- 前后端版本显示
+## Features
 
-### 2. 网络管理
-- **网络接口**: 查看和配置网络接口（物理接口、VLAN、PPPoE）
-- **路由表**: 管理静态路由和已连接路由
-- **路由表摘要**: 查看完整的路由表（包含所有路由来源）
-- **ARP 表**: 查看 ARP/NDP 表项
-- **DNS 配置**: 查看和配置 DNS 服务器
+### 1. System Information
+- System version, uptime
+- CPU, memory, disk usage
+- Hardware information
+- Frontend and backend version display
 
-### 3. 路由协议
-- **BGP**: BGP 协议完整配置（对等体、网络、路由映射、前缀列表、团体列表）
-- **IS-IS**: IS-IS 协议配置（接口、重分发、邻居状态显示）
+### 2. Network Management
+- **Network Interfaces**: View and configure network interfaces (physical, VLAN, PPPoE)
+- **Routing Table**: Manage static routes and connected routes
+- **Routing Summary**: View complete routing table (all route sources)
+- **ARP Table**: View ARP/NDP entries
+- **DNS Configuration**: View and configure DNS servers
 
-### 4. VPN 配置
-- **WireGuard**: 完整的 WireGuard 配置和管理
-  - 接口创建、编辑、删除
-  - Peer 管理
-  - 私钥随机生成
-  - 公钥显示和复制功能
-- **IPsec**: IPsec VPN 配置
-- **OpenVPN**: OpenVPN 配置
+### 3. Routing Protocols
+- **BGP**: Complete BGP configuration (neighbors, networks, route-maps, prefix-lists, community-lists)
+- **IS-IS**: IS-IS protocol configuration (interfaces, redistribution, neighbor status)
 
-### 5. 安全管理
-- **防火墙**: 防火墙规则管理
-- **NAT**: NAT 规则管理
-- **Policy**: 策略管理（路由映射、前缀列表、团体列表）
+### 4. VPN Configuration
+- **WireGuard**: Complete WireGuard configuration and management
+  - Interface creation, editing, deletion
+  - Peer management
+  - Random private key generation
+  - Public key display and copy
+- **IPsec**: IPsec VPN configuration
+- **OpenVPN**: OpenVPN configuration
 
-### 6. 用户认证
-- 用户登录验证
-- 默认管理员账号: vyos/vyos
+### 5. Security Management
+- **Firewall**: Firewall rules management
+- **NAT**: NAT rules management
+- **Policy**: Policy management (route-maps, prefix-lists, community-lists)
 
-## 技术栈
+### 6. User Authentication
+- User login authentication
+- Default admin account: vyos/vyos
 
-### 前端
+## Technology Stack
+
+### Frontend
 - React 19 + TypeScript
 - Vite
 - Ant Design 6
 
-### 后端
+### Backend
 - FastAPI (Python 3.12)
-- Pydantic (数据验证)
-- Paramiko (SSH 连接)
-- Uvicorn (ASGI 服务器)
+- Pydantic (data validation)
+- Paramiko (SSH connection)
+- Uvicorn (ASGI server)
 
-### VyOS 交互方式
-- **读取数据**: `vyatta-op-cmd-wrapper` + `show` 命令
-- **写入配置**: 交互式 SSH 会话 (`invoke_shell()`) + `configure` 模式
+### VyOS Interaction
+- **Read**: `vyatta-op-cmd-wrapper` + `show` commands
+- **Write Configuration**: Interactive SSH session (`invoke_shell()`) + `configure` mode
 
-## 项目结构
+## Project Structure
 
 ```
 vyos-webui/
-├── frontend/          # 前端项目
+├── frontend/          # Frontend project
 │   ├── src/
-│   │   ├── components/    # 可复用组件
-│   │   ├── pages/         # 页面组件
-│   │   ├── api/           # API 调用
+│   │   ├── components/    # Reusable components
+│   │   ├── pages/         # Page components
+│   │   ├── api/           # API calls
 │   │   └── contexts/      # React Context
 │   └── package.json
-├── backend/           # 后端项目
+├── backend/           # Backend project
 │   ├── app/
-│   │   ├── api/           # API 路由 (v1)
-│   │   ├── services/      # 业务逻辑
-│   │   │   ├── vyos_ssh.py        # SSH 连接
-│   │   │   ├── vyos_command.py    # 命令执行
-│   │   │   ├── vyos_config.py     # 配置会话
-│   │   │   └── vyos_config_service.py  # 高级配置服务
-│   │   └── core/          # 核心功能
-│   └── main.py           # FastAPI 入口
-├── scripts/           # 辅助脚本
-├── debian/            # Debian 打包配置
+│   │   ├── api/           # API routes (v1)
+│   │   ├── services/      # Business logic
+│   │   │   ├── vyos_ssh.py        # SSH connection
+│   │   │   ├── vyos_command.py    # Command execution
+│   │   │   ├── vyos_config.py     # Configuration session
+│   │   │   └── vyos_config_service.py  # Advanced configuration service
+│   │   └── core/          # Core functionality
+│   └── main.py           # FastAPI entry point
+├── scripts/           # Helper scripts
 └── README.md
 ```
 
-## 快速开始（开发环境）
+## Quick Start (Development Environment)
 
-### 前置要求
+### Prerequisites
 
 - Node.js 18+
 - Python 3.12+
-- VyOS 设备
+- VyOS device
 
-### 1. 配置 VyOS 连接
+### 1. Configure VyOS Connection
 
-在 `backend/.env` 中配置 VyOS 连接信息：
+Create `backend/.env` with VyOS connection information:
 
 ```env
 VYOS_HOST=192.168.1.1
@@ -106,23 +107,23 @@ VYOS_PASSWORD=your_password
 VYOS_TIMEOUT=30
 ```
 
-### 2. 启动后端
+### 2. Start Backend
 
 ```bash
 cd backend
 
-# 创建虚拟环境 (首次)
+# Create virtual environment (first time)
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 启动后端服务器
+# Start backend server
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-后端 API 文档: http://localhost:8000/docs
+Backend API docs: http://localhost:8000/docs
 
-### 3. 启动前端
+### 3. Start Frontend
 
 ```bash
 cd frontend
@@ -130,76 +131,105 @@ npm install
 npm run dev
 ```
 
-前端访问: http://localhost:5173
+Frontend access: http://localhost:5173
 
-### 4. 登录
+### 4. Login
 
-默认管理员账号:
-- 用户名: `vyos`
-- 密码: `vyos`
+Default admin account:
+- Username: `vyos`
+- Password: `vyos`
 
-## 部署说明
+## Deployment
 
-详细的 VyOS 部署文档请参考 [DEPLOY.md](./DEPLOY.md)。
+### Prerequisites for Deployment Machine
 
-## API 端点
+- Node.js 18+
+- Python 3.11+
+- Git
+- sshpass, scp
+- Access to VyOS device
 
-### 系统信息
-- `GET /api/v1/system/info` - 获取系统信息
-- `GET /api/v1/version` - 获取后端版本
+### Deploy to VyOS
 
-### 网络管理
-- `GET /api/v1/network/interfaces` - 获取网络接口列表
-- `GET /api/v1/network/interfaces/{name}` - 获取特定接口详情
-- `POST /api/v1/network/interfaces` - 创建接口
-- `PUT /api/v1/network/interfaces/{name}` - 更新接口
-- `DELETE /api/v1/network/interfaces/{name}` - 删除接口
-- `GET /api/v1/network/routes` - 获取路由表
-- `POST /api/v1/network/routes` - 添加静态路由
-- `DELETE /api/v1/network/routes/{destination}` - 删除静态路由
-- `GET /api/v1/network/routes/summary` - 获取完整路由表摘要
-- `GET /api/v1/network/arp-table` - 获取 ARP 表
-- `GET /api/v1/network/dns` - 获取 DNS 配置
-- `PUT /api/v1/network/dns/servers` - 设置 DNS 服务器
+```bash
+./scripts/deploy.sh [VyOS_HOST] [VyOS_USER] [VyOS_PASSWORD]
+```
 
-### VPN 管理
-- `GET /api/v1/vpn/wireguard/config` - 获取 WireGuard 配置
-- `POST /api/v1/vpn/wireguard/interfaces` - 创建 WireGuard 接口
-- `DELETE /api/v1/vpn/wireguard/interfaces/{name}` - 删除 WireGuard 接口
-- `POST /api/v1/vpn/wireguard/interfaces/{name}/peers` - 添加 WireGuard Peer
-- `DELETE /api/v1/vpn/wireguard/interfaces/{name}/peers/{peerName}` - 删除 WireGuard Peer
-- `GET /api/v1/vpn/ipsec/config` - 获取 IPsec 配置
-- `GET /api/v1/vpn/openvpn/config` - 获取 OpenVPN 配置
+Example:
+```bash
+./scripts/deploy.sh 192.168.1.1 vyos vyos
+```
 
-### BGP 管理
-- `GET /api/v1/bgp/config` - 获取 BGP 配置
-- `PUT /api/v1/bgp/config` - 更新 BGP 配置
-- `POST /api/v1/bgp/neighbors` - 创建 BGP 对等体
-- `DELETE /api/v1/bgp/neighbors/{ip}` - 删除 BGP 对等体
-- `GET /api/v1/bgp/summary` - 获取 BGP 摘要
-- `GET /api/v1/bgp/prefix-lists` - 获取前缀列表
-- `GET /api/v1/bgp/route-maps` - 获取路由映射
-- `GET /api/v1/bgp/community-lists` - 获取团体列表
+After deployment, access: http://[VyOS_IP]:8000
 
-### IS-IS 管理
-- `GET /api/v1/isis/config` - 获取 IS-IS 配置
-- `POST /api/v1/isis/setup` - 设置 IS-IS
-- `PUT /api/v1/isis/config` - 更新 IS-IS 配置
-- `DELETE /api/v1/isis/config` - 禁用 IS-IS
-- `GET /api/v1/isis/status` - 获取 IS-IS 状态
+**Note: The default credentials are vyos/vyos
 
-### 认证
-- `POST /api/v1/auth/login` - 用户登录
+### Management commands on VyOS:
+```bash
+cd /opt/vyos-webui
+./start.sh   # Start services
+./stop.sh    # Stop services
+./status.sh  # Check status
+```
 
-## 版本信息
+## API Endpoints
 
-- 前端版本: 0.0.1-20250221
-- 后端版本: 0.0.1-20250221
+### System
+- `GET /api/v1/system/info` - Get system information
+- `GET /api/v1/version` - Get backend version
 
-## 开发说明
+### Network Management
+- `GET /api/v1/network/interfaces` - Get network interface list
+- `GET /api/v1/network/interfaces/{name}` - Get specific interface details
+- `POST /api/v1/network/interfaces` - Create interface
+- `PUT /api/v1/network/interfaces/{name}` - Update interface
+- `DELETE /api/v1/network/interfaces/{name}` - Delete interface
+- `GET /api/v1/network/routes` - Get routing table
+- `POST /api/v1/network/routes` - Add static route
+- `DELETE /api/v1/network/routes/{destination}` - Delete static route
+- `GET /api/v1/network/routes/summary` - Get complete routing table summary
+- `GET /api/v1/network/arp-table` - Get ARP table
+- `GET /api/v1/network/dns` - Get DNS configuration
+- `PUT /api/v1/network/dns/servers` - Set DNS servers
 
-本项目通过 Claude Code 配合模型 GLM4.7+Doubao-Seed-2.0-Code 开发。
+### VPN Management
+- `GET /api/v1/vpn/wireguard/config` - Get WireGuard configuration
+- `POST /api/v1/vpn/wireguard/interfaces` - Create WireGuard interface
+- `DELETE /api/v1/vpn/wireguard/interfaces/{name}` - Delete WireGuard interface
+- `POST /api/v1/vpn/wireguard/interfaces/{name}/peers` - Add WireGuard peer
+- `DELETE /api/v1/vpn/wireguard/interfaces/{name}/peers/{peerName}` - Delete WireGuard peer
+- `GET /api/v1/vpn/ipsec/config` - Get IPsec configuration
+- `GET /api/v1/vpn/openvpn/config` - Get OpenVPN configuration
 
-## 许可证
+### BGP Management
+- `GET /api/v1/bgp/config` - Get BGP configuration
+- `PUT /api/v1/bgp/config` - Update BGP configuration
+- `POST /api/v1/bgp/neighbors` - Create BGP neighbor
+- `DELETE /api/v1/bgp/neighbors/{ip}` - Delete BGP neighbor
+- `GET /api/v1/bgp/summary` - Get BGP summary
+- `GET /api/v1/bgp/prefix-lists` - Get prefix lists
+- `GET /api/v1/bgp/route-maps` - Get route maps
+- `GET /api/v1/bgp/community-lists` - Get community lists
+
+### IS-IS Management
+- `GET /api/v1/isis/config` - Get IS-IS configuration
+- `POST /api/v1/isis/setup` - Setup IS-IS
+- `PUT /api/v1/isis/config` - Update IS-IS configuration
+- `DELETE /api/v1/isis/config` - Disable IS-IS
+- `GET /api/v1/isis/status` - Get IS-IS status
+
+### Authentication
+- `POST /api/v1/auth/login` - User login
+
+## Version Information
+
+- Frontend version: 0.0.1-20250221
+- Backend version: 0.0.1-20250221
+
+## Development Notes
+
+This project was developed with Claude Code and GLM4.7+Doubao-Seed-2.0-Code.
+
+## License
 
 MIT License

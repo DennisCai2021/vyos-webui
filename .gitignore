@@ -60,5 +60,6 @@ progress.json
 tasks.json
 *.md
 !README.md
+!README_CN.md
 !DEPLOY.md
 
