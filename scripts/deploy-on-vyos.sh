@@ -66,7 +66,9 @@ if [ -d "$INSTALL_DIR/.git" ]; then
 else
     # 新安装
     echo "新安装，正在克隆仓库..."
-    rm -rf "$INSTALL_DIR"
+    sudo rm -rf "$INSTALL_DIR"
+    sudo mkdir -p "$INSTALL_DIR"
+    sudo chown -R "$VYOS_USER:users" "$INSTALL_DIR"
     git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
 fi
 
