@@ -29,7 +29,6 @@ check_tool() {
 
 check_tool git
 check_tool python3
-check_tool pip3 2>/dev/null || check_tool pip
 
 # 1. 停止旧服务
 echo "[1/5] 停止旧服务..."
@@ -64,13 +63,49 @@ fi
 cd "$INSTALL_DIR"
 echo "当前版本: $(git log -1 --oneline)"
 
-# 3. 安装 Python 依赖
+# 3. 准备 Python 环境
 echo ""
-echo "[3/5] 安装 Python 依赖..."
+echo "[3/5] 准备 Python 环境..."
 cd "$INSTALL_DIR/backend"
 
-# 使用 --user 安装，避免权限问题
-pip3 install --user -q -r requirements.txt 2>/dev/null || pip install --user -q -r requirements.txt
+# 创建 venv（不使用 pip）
+if [ ! -d "venv" ]; then
+    echo "创建 Python venv..."
+    python3 -m venv venv --without-pip 2>/dev/null || python3 -m venv venv
+fi
+
+# 修复 venv 配置
+echo "修复 venv 配置..."
+cat > venv/pyvenv.cfg << 'CFGEOF'
+home = /usr/bin
+include-system-site-packages = true
+version = 3.11.2
+CFGEOF
+
+# 修复符号链接
+cd venv/bin
+rm -f python python3 python3.11 python3.12
+ln -sf /usr/bin/python3 python
+ln -sf /usr/bin/python3 python3
+if [ -x /usr/bin/python3.11 ]; then
+    ln -sf /usr/bin/python3.11 python3.11
+fi
+
+cd ../..
+
+# 尝试安装 pip
+echo "检查 pip..."
+if ! ./venv/bin/python3 -m pip --version 2>/dev/null; then
+    echo "安装 pip..."
+    curl -sSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+    ./venv/bin/python3 /tmp/get-pip.py 2>/dev/null || true
+fi
+
+# 安装依赖
+echo "安装 Python 依赖..."
+./venv/bin/python3 -m pip install -q -r requirements.txt 2>/dev/null || \
+./venv/bin/python3 -m pip install -q --break-system-packages -r requirements.txt 2>/dev/null || \
+echo "警告: 依赖安装可能不完全，尝试继续..."
 
 # 创建 .env 文件
 echo "创建环境配置..."
@@ -121,13 +156,15 @@ echo "启动 VyOS Web UI..."
 echo "  启动后端（含前端服务）..."
 cd backend
 
-# 添加用户 site-packages 到路径
-export PYTHONPATH="$HOME/.local/lib/python3.11/site-packages:$HOME/.local/lib/python3.12/site-packages"
-
 # 尝试启动
 BACKEND_PID=""
-if python3 -c "import uvicorn" 2>/dev/null; then
-    echo "    使用系统 uvicorn..."
+if [ -f "venv/bin/python3" ]; then
+    echo "    使用 venv..."
+    venv/bin/python3 -c "import uvicorn" 2>/dev/null || venv/bin/python3 -m pip install -q uvicorn fastapi loguru jose paramiko 2>/dev/null || true
+    venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
+    BACKEND_PID=$!
+elif python3 -c "import uvicorn" 2>/dev/null; then
+    echo "    使用系统 Python..."
     python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
     BACKEND_PID=$!
 else
@@ -138,22 +175,12 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# 添加用户 site-packages
-user_site = os.path.expanduser("~/.local/lib/python3.11/site-packages")
-if os.path.exists(user_site):
-    sys.path.insert(0, user_site)
-user_site2 = os.path.expanduser("~/.local/lib/python3.12/site-packages")
-if os.path.exists(user_site2):
-    sys.path.insert(0, user_site2)
-
 try:
     import uvicorn
     from main import app
     uvicorn.run(app, host="0.0.0.0", port=8000)
 except ImportError as e:
     print(f"错误: {e}")
-    print("")
-    print("请先安装依赖: pip3 install --user -r requirements.txt")
     sys.exit(1)
 PYEND
     chmod +x run_backend.py
