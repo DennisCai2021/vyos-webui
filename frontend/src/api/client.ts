@@ -5,19 +5,8 @@ function getApiBaseUrl(): string {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL
   }
-  // If in browser, check if we're being served from the same port as the API
-  if (typeof window !== 'undefined') {
-    // If we're on port 8000 (served by backend), use relative path
-    if (window.location.port === '8000' || window.location.port === '') {
-      return ''
-    }
-    // Otherwise use same host but port 8000
-    const protocol = window.location.protocol
-    const hostname = window.location.hostname
-    return `${protocol}//${hostname}:8000`
-  }
-  // Fallback for development
-  return 'http://localhost:8000'
+  // Always use relative path - frontend and backend are served from same origin
+  return ''
 }
 
 const API_BASE_URL = getApiBaseUrl()
