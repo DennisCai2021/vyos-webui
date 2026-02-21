@@ -31,7 +31,7 @@ check_tool scp
 check_tool tar
 
 # 构建前端（如果需要）
-echo "[1/6] 检查前端构建..."
+echo "[1/7] 检查前端构建..."
 cd "$(dirname "$0")/.."
 if [ ! -d "frontend/dist" ] || [ -z "$(ls -A frontend/dist)" ]; then
     echo "前端未构建，正在构建..."
@@ -45,25 +45,49 @@ else
     echo "前端已构建，跳过"
 fi
 
+# 创建可移植的Python环境
+echo ""
+echo "[2/7] 准备可移植Python环境..."
+cd backend
+if [ ! -d "venv" ]; then
+    echo "创建本地venv..."
+    python3 -m venv venv
+fi
+source venv/bin/activate
+pip install -q -r requirements.txt
+
+# 创建一个可移植的启动脚本
+cat > venv/bin/python_portable << 'PYEOF'
+#!/bin/bash
+# 可移植Python启动器
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONHOME="$DIR/.."
+export PYTHONPATH="$DIR/../lib/python3.12/site-packages:$PYTHONPATH"
+exec /usr/bin/python3 "$@"
+PYEOF
+chmod +x venv/bin/python_portable
+
+echo "Python依赖已就绪"
+cd ..
+
 # 创建SSH命令
 SSH_CMD="sshpass -p $VYOS_PASS ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $VYOS_USER@$VYOS_HOST"
 SCP_CMD="sshpass -p $VYOS_PASS scp -o StrictHostKeyChecking=no -o ConnectTimeout=10"
 
 # 1. 创建目标目录
 echo ""
-echo "[2/6] 创建远程目录..."
+echo "[3/7] 创建远程目录..."
 $SSH_CMD "sudo mkdir -p $REMOTE_DIR && sudo chown -R $VYOS_USER:users $REMOTE_DIR"
 
-# 2. 创建传输归档（包含venv）
+# 2. 创建传输归档
 echo ""
-echo "[3/6] 打包文件..."
+echo "[4/7] 打包文件..."
 TMP_TAR="/tmp/vyos-webui-$(date +%Y%m%d%H%M%S).tar.gz"
 tar -czf "$TMP_TAR" \
     --exclude='.git' \
     --exclude='__pycache__' \
     --exclude='*.pyc' \
     --exclude='node_modules' \
-    --exclude='venv' \
     --exclude='.env' \
     --exclude='.claude' \
     --exclude='*.log' \
@@ -74,17 +98,17 @@ echo "已创建: $TMP_TAR"
 
 # 3. 传输文件
 echo ""
-echo "[4/6] 传输文件到VyOS..."
+echo "[5/7] 传输文件到VyOS..."
 $SCP_CMD "$TMP_TAR" "$VYOS_USER@$VYOS_HOST:/tmp/"
 
 # 4. 解压文件
 echo ""
-echo "[5/6] 解压文件..."
+echo "[6/7] 解压文件..."
 $SSH_CMD "cd $REMOTE_DIR && tar -xzf /tmp/$(basename "$TMP_TAR") && rm -f /tmp/$(basename "$TMP_TAR")"
 
 # 5. 在VyOS上设置环境并启动
 echo ""
-echo "[6/6] 在VyOS上配置并启动服务..."
+echo "[7/7] 在VyOS上配置并启动服务..."
 
 # 创建远程安装脚本
 cat << 'REMOTE_SCRIPT' > /tmp/vyos_install.sh
@@ -103,6 +127,23 @@ VYOS_USERNAME=vyos
 VYOS_PASSWORD=vyos
 VYOS_TIMEOUT=30
 EOF
+
+# 修复venv（如果存在）
+if [ -d "venv" ]; then
+    echo "  修复venv配置..."
+    # 更新pyvenv.cfg
+    cat > venv/pyvenv.cfg << 'CFGEOF'
+home = /usr/bin
+include-system-site-packages = false
+version = 3.11.2
+CFGEOF
+    # 修复符号链接
+    cd venv/bin
+    rm -f python python3 python3.12
+    ln -s /usr/bin/python3 python
+    ln -s /usr/bin/python3 python3
+    cd ../..
+fi
 
 echo ""
 echo "步骤 2/4: 创建启动和停止脚本..."
@@ -125,36 +166,51 @@ echo "启动 VyOS Web UI..."
 echo "  启动后端..."
 cd backend
 
-# 方法1: 尝试用venv（如果存在）
-if [ -d "venv" ] && [ -x "venv/bin/python3" ]; then
-    echo "    使用venv..."
+# 设置PYTHONPATH
+if [ -d "venv/lib/python3.12/site-packages" ]; then
     export PYTHONPATH="$(pwd)/venv/lib/python3.12/site-packages:$(pwd)/venv/lib/python3.11/site-packages:$PYTHONPATH"
-    venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
+elif [ -d "venv/lib/python3.11/site-packages" ]; then
+    export PYTHONPATH="$(pwd)/venv/lib/python3.11/site-packages:$PYTHONPATH"
+fi
+
+# 尝试多种方式启动
+if [ -f "venv/bin/uvicorn" ]; then
+    echo "    方式1: 使用venv uvicorn..."
+    sed -i '1s|.*|#!/usr/bin/python3|' venv/bin/uvicorn 2>/dev/null || true
+    python3 venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
 elif python3 -c "import uvicorn" 2>/dev/null; then
-    # 方法2: 系统Python有uvicorn
-    echo "    使用系统Python..."
+    echo "    方式2: 使用系统uvicorn..."
     python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
 else
-    # 方法3: 创建一个简单的HTTP服务器来替代
-    echo "    创建简单后端服务..."
-    cat > simple_server.py << 'PYEND'
+    echo "    方式3: 尝试直接运行..."
+    cat > run_backend.py << 'PYEND'
 #!/usr/bin/env python3
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# 尝试添加site-packages
+for p in ['venv/lib/python3.12/site-packages', 'venv/lib/python3.11/site-packages']:
+    sp = os.path.join(os.path.dirname(os.path.abspath(__file__)), p)
+    if os.path.exists(sp):
+        sys.path.insert(0, sp)
 
 try:
     import uvicorn
     from main import app
     uvicorn.run(app, host="0.0.0.0", port=8000)
 except ImportError as e:
-    print(f"需要的依赖未安装: {e}")
-    print("请在部署机上运行后端，然后用SSH端口转发访问")
-    print("或者在VyOS上手动安装Python依赖")
+    print(f"错误: {e}")
+    print("")
+    print("Python依赖未安装，推荐方案：")
+    print("1. 在部署机运行前后端服务")
+    print("2. 用SSH端口转发访问：")
+    print("   ssh -L 5173:localhost:5173 -L 8000:localhost:8000 vyos@<this-ip>")
+    print("3. 然后浏览器访问: http://localhost:5173")
     sys.exit(1)
 PYEND
-    chmod +x simple_server.py
-    python3 simple_server.py > ../backend.log 2>&1 &
+    chmod +x run_backend.py
+    python3 run_backend.py > ../backend.log 2>&1 &
 fi
 BACKEND_PID=$!
 
@@ -217,7 +273,7 @@ echo "停止 VyOS Web UI..."
 pkill -f 'uvicorn.*main:app' 2>/dev/null && echo "  后端已停止" || echo "  后端未运行"
 pkill -f 'python.*-m http.server' 2>/dev/null && echo "  前端已停止" || echo "  前端未运行"
 pkill -f 'python.*backend/main.py' 2>/dev/null
-pkill -f 'python.*simple_server.py' 2>/dev/null
+pkill -f 'python.*run_backend.py' 2>/dev/null
 echo "完成"
 EOF
 
@@ -228,8 +284,8 @@ echo "VyOS Web UI 状态:"
 echo ""
 if pgrep -f 'uvicorn.*main:app' > /dev/null; then
     echo "后端: 运行中 (PID: $(pgrep -f 'uvicorn.*main:app'))"
-elif pgrep -f 'python.*simple_server.py' > /dev/null; then
-    echo "后端: 运行中 (PID: $(pgrep -f 'python.*simple_server.py'))"
+elif pgrep -f 'python.*run_backend.py' > /dev/null; then
+    echo "后端: 运行中 (PID: $(pgrep -f 'python.*run_backend.py'))"
 else
     echo "后端: 未运行"
 fi
