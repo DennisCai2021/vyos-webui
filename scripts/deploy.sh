@@ -31,7 +31,7 @@ check_tool scp
 check_tool tar
 
 # 构建前端（如果需要）
-echo "[1/5] 检查前端构建..."
+echo "[1/6] 检查前端构建..."
 cd "$(dirname "$0")/.."
 if [ ! -d "frontend/dist" ] || [ -z "$(ls -A frontend/dist)" ]; then
     echo "前端未构建，正在构建..."
@@ -51,12 +51,12 @@ SCP_CMD="sshpass -p $VYOS_PASS scp -o StrictHostKeyChecking=no -o ConnectTimeout
 
 # 1. 创建目标目录
 echo ""
-echo "[2/5] 创建远程目录..."
+echo "[2/6] 创建远程目录..."
 $SSH_CMD "sudo mkdir -p $REMOTE_DIR && sudo chown -R $VYOS_USER:users $REMOTE_DIR"
 
 # 2. 创建传输归档
 echo ""
-echo "[3/5] 打包文件..."
+echo "[3/6] 打包文件..."
 TMP_TAR="/tmp/vyos-webui-$(date +%Y%m%d%H%M%S).tar.gz"
 tar -czf "$TMP_TAR" \
     --exclude='.git' \
@@ -75,101 +75,162 @@ echo "已创建: $TMP_TAR"
 
 # 3. 传输文件
 echo ""
-echo "[4/5] 传输文件到VyOS..."
+echo "[4/6] 传输文件到VyOS..."
 $SCP_CMD "$TMP_TAR" "$VYOS_USER@$VYOS_HOST:/tmp/"
 
 # 4. 解压文件
 echo ""
-echo "[5/5] 解压文件..."
+echo "[5/6] 解压文件..."
 $SSH_CMD "cd $REMOTE_DIR && tar -xzf /tmp/$(basename "$TMP_TAR") && rm -f /tmp/$(basename "$TMP_TAR")"
 
-# 创建.env文件
-$SSH_CMD "cat > $REMOTE_DIR/backend/.env << 'EOF'
+# 5. 在VyOS上设置环境并启动
+echo ""
+echo "[6/6] 在VyOS上配置并启动服务..."
+
+# 创建远程安装脚本
+cat << 'REMOTE_SCRIPT' > /tmp/vyos_install.sh
+#!/bin/bash
+set -e
+
+REMOTE_DIR="/opt/vyos-webui"
+cd "$REMOTE_DIR"
+
+echo "步骤 1/5: 安装系统依赖..."
+sudo apt-get update
+sudo apt-get install -y python3-venv python3-pip python3-dev gcc
+
+echo ""
+echo "步骤 2/5: 创建Python虚拟环境..."
+cd backend
+rm -rf venv
+python3 -m venv venv
+
+echo ""
+echo "步骤 3/5: 安装Python依赖..."
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+echo ""
+echo "步骤 4/5: 创建环境配置..."
+cat > .env << 'EOF'
 VYOS_HOST=127.0.0.1
 VYOS_PORT=22
 VYOS_USERNAME=vyos
 VYOS_PASSWORD=vyos
 VYOS_TIMEOUT=30
-EOF"
+EOF
 
-# 创建启动脚本（使用本机代理方式）
-$SSH_CMD "cat > $REMOTE_DIR/start.sh << 'EOF'
+echo ""
+echo "步骤 5/5: 创建启动和停止脚本..."
+cd ..
+
+# 启动脚本
+cat > start.sh << 'EOF'
 #!/bin/bash
-# VyOS Web UI 启动脚本
-# 注意：由于VyOS上安装Python依赖较复杂，推荐使用部署机运行后端+前端，
-# 或者使用SSH端口转发方式访问本机服务。
-
-cd \"\$(dirname \"\$0\")\"
-
-echo \"=========================================\"
-echo \"  VyOS Web UI\"
-echo \"=========================================\"
-echo \"\"
-echo \"选项1 - 使用SSH端口转发（推荐）：\"
-echo \"  在你的本地机器运行：\"
-echo \"    ssh -L 5173:localhost:5173 -L 8000:localhost:8000 vyos@$VYOS_HOST\"
-echo \"  然后访问：http://localhost:5173\"
-echo \"\"
-echo \"选项2 - 仅启动前端（静态文件）：\"
-echo \"  前端将在 http://$VYOS_HOST:5173 提供\"
-echo \"  但需要修改前端API地址指向有后端服务的机器\"
-echo \"\"
-echo \"正在启动前端静态文件服务器...\"
+cd "$(dirname "$0")"
 
 # 停止旧进程
-pkill -f \"python.*-m http.server\" 2>/dev/null || true
+pkill -f 'uvicorn.*main:app' 2>/dev/null || true
+pkill -f 'python.*-m http.server' 2>/dev/null || true
+sleep 1
 
-# 启动前端（仅静态文件）
-cd frontend/dist
+echo "启动 VyOS Web UI..."
+
+# 启动后端
+echo "  启动后端..."
+cd backend
+source venv/bin/activate
+nohup python -m uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
+BACKEND_PID=$!
+
+# 启动前端
+echo "  启动前端..."
+cd ../frontend/dist
 nohup python3 -m http.server 5173 --bind 0.0.0.0 > ../../frontend.log 2>&1 &
-FRONTEND_PID=\$!
+FRONTEND_PID=$!
 
 cd ../..
 
-echo \"前端 PID: \$FRONTEND_PID\"
-echo \"前端地址: http://$VYOS_HOST:5173\"
-echo \"\"
-echo \"查看日志: tail -f frontend.log\"
-echo \"停止服务: pkill -f 'python.*-m http.server'\"
-EOF"
+echo ""
+echo "========================================="
+echo "  启动完成！"
+echo "========================================="
+echo "后端 PID: $BACKEND_PID"
+echo "前端 PID: $FRONTEND_PID"
+echo ""
+echo "访问地址: http://$(hostname -I | awk '{print $1}'):5173"
+echo "后端 API: http://$(hostname -I | awk '{print $1}'):8000"
+echo ""
+echo "默认登录: vyos / vyos"
+echo ""
+echo "查看日志:"
+echo "  后端: tail -f backend.log"
+echo "  前端: tail -f frontend.log"
+EOF
 
-$SSH_CMD "chmod +x $REMOTE_DIR/start.sh"
-
-# 创建停止脚本
-$SSH_CMD "cat > $REMOTE_DIR/stop.sh << 'EOF'
+# 停止脚本
+cat > stop.sh << 'EOF'
 #!/bin/bash
-# VyOS Web UI 停止脚本
+echo "停止 VyOS Web UI..."
+pkill -f 'uvicorn.*main:app' 2>/dev/null && echo "  后端已停止" || echo "  后端未运行"
+pkill -f 'python.*-m http.server' 2>/dev/null && echo "  前端已停止" || echo "  前端未运行"
+echo "完成"
+EOF
 
-echo \"停止 VyOS Web UI...\"
-pkill -f \"uvicorn\" 2>/dev/null && echo \"后端已停止\" || echo \"后端未运行\"
-pkill -f \"python.*-m http.server\" 2>/dev/null && echo \"前端已停止\" || echo \"前端未运行\"
-echo \"完成\"
-EOF"
+# 查看状态脚本
+cat > status.sh << 'EOF'
+#!/bin/bash
+echo "VyOS Web UI 状态:"
+echo ""
+if pgrep -f 'uvicorn.*main:app' > /dev/null; then
+    echo "后端: 运行中 (PID: $(pgrep -f 'uvicorn.*main:app'))"
+else
+    echo "后端: 未运行"
+fi
+if pgrep -f 'python.*-m http.server' > /dev/null; then
+    echo "前端: 运行中 (PID: $(pgrep -f 'python.*-m http.server'))"
+else
+    echo "前端: 未运行"
+fi
+echo ""
+if ss -tlnp 2>/dev/null | grep -q ':5173'; then
+    echo "端口 5173: 已监听"
+fi
+if ss -tlnp 2>/dev/null | grep -q ':8000'; then
+    echo "端口 8000: 已监听"
+fi
+EOF
 
-$SSH_CMD "chmod +x $REMOTE_DIR/stop.sh"
+chmod +x start.sh stop.sh status.sh
+
+echo ""
+echo "正在启动服务..."
+./start.sh
+
+REMOTE_SCRIPT
+
+# 传输并执行远程安装脚本
+chmod +x /tmp/vyos_install.sh
+$SCP_CMD /tmp/vyos_install.sh "$VYOS_USER@$VYOS_HOST:/tmp/"
+$SSH_CMD "chmod +x /tmp/vyos_install.sh && sudo /tmp/vyos_install.sh"
 
 # 清理本地临时文件
-rm -f "$TMP_TAR"
+rm -f "$TMP_TAR" /tmp/vyos_install.sh
 
 echo ""
 echo "========================================="
 echo "  部署完成！"
 echo "========================================="
 echo ""
-echo "文件已部署到: $REMOTE_DIR"
+echo "访问地址: http://$VYOS_HOST:5173"
+echo "后端 API: http://$VYOS_HOST:8000"
 echo ""
-echo "快速开始（推荐方式 - 使用本机服务）："
-echo "  1. 确保本机的前后端服务正在运行"
-echo "  2. 使用SSH端口转发："
-echo "     ssh -L 5173:localhost:5173 -L 8000:localhost:8000 $VYOS_USER@$VYOS_HOST"
-echo "  3. 在浏览器访问: http://localhost:5173"
+echo "默认登录: vyos / vyos"
 echo ""
-echo "或者在VyOS上仅启动前端静态文件："
-echo "  ssh $VYOS_USER@$VYOS_HOST"
-echo "  cd $REMOTE_DIR"
-echo "  ./start.sh"
-echo ""
-echo "管理命令:"
+echo "VyOS上的管理命令:"
+echo "  启动: cd $REMOTE_DIR && ./start.sh"
 echo "  停止: cd $REMOTE_DIR && ./stop.sh"
-echo "  日志: tail -f $REMOTE_DIR/frontend.log"
+echo "  状态: cd $REMOTE_DIR && ./status.sh"
+echo "  日志: tail -f $REMOTE_DIR/backend.log"
 echo ""
