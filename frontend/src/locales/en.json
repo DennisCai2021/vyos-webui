@@ -1,0 +1,49 @@
+{
+  "common": {
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "loading": "Loading...",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Info"
+  },
+  "login": {
+    "title": "VyOS WebUI",
+    "subtitle": "VyOS Router Management",
+    "username": "Username",
+    "usernamePlaceholder": "Enter your username",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "rememberMe": "Remember me",
+    "loginButton": "Login",
+    "loggingIn": "Logging in...",
+    "loginSuccess": "Login successful!",
+    "loginFailed": "Login failed",
+    "invalidCredentials": "Invalid username or password",
+    "accountLocked": "Account is locked. Please contact administrator.",
+    "accountDisabled": "Account is disabled. Please contact administrator.",
+    "tooManyAttempts": "Too many login attempts. Please try again later.",
+    "serverError": "Server error. Please try again later.",
+    "networkError": "Network error. Please check your connection.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "copyright": "© {year} VyOS WebUI. All rights reserved."
+  },
+  "auth": {
+    "mfaRequired": "Multi-factor authentication required",
+    "mfaCode": "MFA Code",
+    "mfaPlaceholder": "Enter your MFA code",
+    "mfaInvalid": "Invalid MFA code",
+    "sessionTimeout": "Your session has expired",
+    "sessionTimeoutMessage": "Your session has expired. Please log in again.",
+    "logout": "Logout",
+    "logoutSuccess": "You have been logged out successfully."
+  }
+}

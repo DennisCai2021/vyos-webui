@@ -1,0 +1,72 @@
+#!/bin/bash
+# VyOS WebUI Post-Removal Script
+
+set -e
+
+echo "VyOS WebUI - Post-Removal"
+
+case "$1" in
+    purge)
+        # Stop service if still running
+        if systemctl is-active --quiet vyos-webui 2>/dev/null; then
+            echo "Stopping vyos-webui service..."
+            systemctl stop vyos-webui || true
+        fi
+
+        # Remove user and group
+        if getent passwd vyos-webui > /dev/null; then
+            echo "Removing vyos-webui user..."
+            userdel vyos-webui || true
+        fi
+
+        # Remove configuration files
+        echo "Removing configuration..."
+        rm -rf /etc/vyos-webui
+        rm -rf /config/vyos-webui
+
+        # Remove log files
+        echo "Removing log files..."
+        rm -rf /var/log/vyos-webui
+
+        # Remove nginx configuration
+        rm -f /etc/nginx/sites-available/vyos-webui
+        rm -f /etc/nginx/sites-enabled/vyos-webui
+
+        # Remove systemd service file
+        rm -f /lib/systemd/system/vyos-webui.service
+
+        # Remove sudoers configuration
+        rm -f /etc/sudoers.d/vyos-webui
+
+        # Remove VyOS configuration integration
+        rm -f /usr/libexec/vyos/conf_mode/vyos-webui.py
+        rm -f /usr/share/vyos/vyos-webui-node.def
+
+        # Reload systemd
+        systemctl daemon-reload || true
+
+        # Reload nginx
+        if systemctl is-active --quiet nginx; then
+            systemctl reload nginx || true
+        fi
+
+        echo "VyOS WebUI has been completely purged from the system."
+        ;;
+
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        # Reload systemd
+        systemctl daemon-reload || true
+
+        # Reload nginx
+        if systemctl is-active --quiet nginx; then
+            systemctl reload nginx || true
+        fi
+        ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

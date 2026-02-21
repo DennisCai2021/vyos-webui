@@ -1,0 +1,29 @@
+[Unit]
+Description=VyOS WebUI Service
+After=network.target network-online.target vyos-router.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=vyos-webui
+Group=vyos-webui
+WorkingDirectory=/opt/vyos-webui
+Environment="PATH=/opt/vyos-webui/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=-/etc/vyos-webui/config.env
+ExecStart=/opt/vyos-webui/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 4 --no-access-log
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StartLimitInterval=0
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/vyos-webui /var/log/vyos-webui /tmp
+ReadWritePaths+=/config
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

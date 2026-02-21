@@ -1,0 +1,11 @@
+# VyOS WebUI sudoers configuration
+# Allow vyos-webui user to execute specific VyOS commands without password
+
+Cmnd_Alias VYOS_WEBUI_CMD = \
+    /opt/vyatta/bin/vyatta-op-cmd-wrapper, \
+    /opt/vyatta/sbin/vyatta-cfg-cmd-wrapper, \
+    /usr/sbin/ip, \
+    /usr/bin/vtysh, \
+    /bin/cli-shell-api
+
+vyos-webui ALL=(ALL) NOPASSWD: VYOS_WEBUI_CMD

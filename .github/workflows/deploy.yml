@@ -1,0 +1,39 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy-to-vyos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+      - name: Build package
+        run: |
+          cd backend
+          python -m venv venv
+          source venv/bin/activate
+          pip install build
+          python -m build
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vyos-webui-package
+          path: |
+            frontend/dist
+            backend/dist/*.whl

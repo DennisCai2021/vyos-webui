@@ -1,0 +1,9 @@
+vyos-webui (1.0.0-1) unstable; urgency=medium
+
+  * Initial release
+  * Basic Web UI for VyOS management
+  * Network, firewall, and VPN configuration
+  * System monitoring and logging
+  * User and permission management
+
+ -- VyOS WebUI Team <team@vyos-webui.local>  Sun, 15 Feb 2026 00:00:00 +0000

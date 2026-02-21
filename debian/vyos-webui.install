@@ -1,0 +1,4 @@
+backend/app /opt/vyos-webui/
+backend/main.py /opt/vyos-webui/
+backend/requirements.txt /opt/vyos-webui/
+backend/pyproject.toml /opt/vyos-webui/
