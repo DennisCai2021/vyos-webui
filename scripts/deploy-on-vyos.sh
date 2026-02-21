@@ -13,22 +13,11 @@ set -e
 REPO_URL="https://github.com/DennisCai2021/vyos-webui.git"
 INSTALL_DIR="/opt/vyos-webui"
 VYOS_USER="vyos"
-VYOS_PASS="vyos"
 
 echo "========================================="
 echo "  VyOS Web UI - 本地部署脚本"
 echo "========================================="
 echo ""
-
-# 检查是否在 VyOS 上运行
-if [ ! -d "/opt/vyatta" ] && [ ! -f "/config/config.boot" ]; then
-    echo "警告: 看起来不在 VyOS 系统上运行"
-    read -p "继续吗? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-fi
 
 # 检查必要工具
 check_tool() {
@@ -40,10 +29,10 @@ check_tool() {
 
 check_tool git
 check_tool python3
-check_tool tar
+check_tool pip3 2>/dev/null || check_tool pip
 
 # 1. 停止旧服务
-echo "[1/6] 停止旧服务..."
+echo "[1/5] 停止旧服务..."
 if [ -d "$INSTALL_DIR" ]; then
     cd "$INSTALL_DIR"
     if [ -f "./stop.sh" ]; then
@@ -54,7 +43,7 @@ fi
 
 # 2. 创建/更新代码
 echo ""
-echo "[2/6] 从 GitHub 拉取最新代码..."
+echo "[2/5] 从 GitHub 拉取最新代码..."
 
 if [ -d "$INSTALL_DIR/.git" ]; then
     # 已存在，更新
@@ -75,55 +64,13 @@ fi
 cd "$INSTALL_DIR"
 echo "当前版本: $(git log -1 --oneline)"
 
-# 3. 设置权限
+# 3. 安装 Python 依赖
 echo ""
-echo "[3/6] 设置权限..."
-chown -R "$VYOS_USER:users" "$INSTALL_DIR" 2>/dev/null || true
-
-# 4. 准备后端环境
-echo ""
-echo "[4/6] 准备 Python 环境..."
+echo "[3/5] 安装 Python 依赖..."
 cd "$INSTALL_DIR/backend"
 
-# 创建 venv
-if [ ! -d "venv" ]; then
-    echo "创建 Python venv..."
-    python3 -m venv venv
-fi
-
-# 修复 venv 配置（VyOS 上的 Python 版本可能不同）
-echo "修复 venv 配置..."
-cat > venv/pyvenv.cfg << 'CFGEOF'
-home = /usr/bin
-include-system-site-packages = false
-version = 3.11.2
-CFGEOF
-
-# 修复符号链接
-cd venv/bin
-rm -f python python3 python3.11 python3.12
-ln -sf /usr/bin/python3 python
-ln -sf /usr/bin/python3 python3
-if [ -x /usr/bin/python3.11 ]; then
-    ln -sf /usr/bin/python3.11 python3.11
-fi
-if [ -x /usr/bin/python3.12 ]; then
-    ln -sf /usr/bin/python3.12 python3.12
-fi
-
-# 修复所有脚本的 shebang
-for f in *; do
-    if [ -f "$f" ] && [ -x "$f" ]; then
-        head -n 1 "$f" | grep -q "^#!" && sed -i '1s|^#!.*python.*|#!/usr/bin/python3|' "$f" 2>/dev/null || true
-    fi
-done
-
-cd ../..
-
-# 安装依赖
-echo "安装 Python 依赖..."
-source venv/bin/activate
-pip install -q -r requirements.txt
+# 使用 --user 安装，避免权限问题
+pip3 install --user -q -r requirements.txt 2>/dev/null || pip install --user -q -r requirements.txt
 
 # 创建 .env 文件
 echo "创建环境配置..."
@@ -135,30 +82,27 @@ VYOS_PASSWORD=vyos
 VYOS_TIMEOUT=30
 EOF
 
-# 5. 检查前端
+# 4. 检查前端
 echo ""
-echo "[5/6] 检查前端..."
+echo "[4/5] 检查前端..."
 cd "$INSTALL_DIR"
 
 if [ ! -d "frontend/dist" ] || [ -z "$(ls -A frontend/dist 2>/dev/null)" ]; then
     echo ""
     echo "========================================="
-    echo "  警告: 前端未构建!"
+    echo "  错误: 前端未找到!"
     echo "========================================="
     echo ""
-    echo "VyOS 上没有 npm，无法构建前端。"
-    echo "请在部署机上构建后，把 frontend/dist 上传到 $INSTALL_DIR/frontend/"
-    echo ""
-    echo "或者使用远程部署脚本: ./scripts/deploy.sh"
+    echo "请确保 GitHub 仓库包含 frontend/dist 目录"
     echo ""
     exit 1
 fi
 
 echo "前端已就绪"
 
-# 6. 创建启动/停止脚本并启动
+# 5. 创建启动/停止脚本并启动
 echo ""
-echo "[6/6] 创建管理脚本并启动服务..."
+echo "[5/5] 创建管理脚本并启动服务..."
 
 # 启动脚本
 cat > "$INSTALL_DIR/start.sh" << 'EOF'
@@ -177,37 +121,30 @@ echo "启动 VyOS Web UI..."
 echo "  启动后端（含前端服务）..."
 cd backend
 
-# 设置 PYTHONPATH
-export PYTHONPATH=""
-if [ -d "venv/lib/python3.11/site-packages" ]; then
-    export PYTHONPATH="$(pwd)/venv/lib/python3.11/site-packages:$PYTHONPATH"
-fi
-if [ -d "venv/lib/python3.12/site-packages" ]; then
-    export PYTHONPATH="$(pwd)/venv/lib/python3.12/site-packages:$PYTHONPATH"
-fi
+# 添加用户 site-packages 到路径
+export PYTHONPATH="$HOME/.local/lib/python3.11/site-packages:$HOME/.local/lib/python3.12/site-packages"
 
 # 尝试启动
 BACKEND_PID=""
-if [ -f "venv/bin/uvicorn" ]; then
-    echo "    方式1: 使用venv uvicorn..."
-    python3 venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
-    BACKEND_PID=$!
-elif python3 -c "import uvicorn" 2>/dev/null; then
-    echo "    方式2: 使用系统uvicorn..."
+if python3 -c "import uvicorn" 2>/dev/null; then
+    echo "    使用系统 uvicorn..."
     python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
     BACKEND_PID=$!
 else
-    echo "    方式3: 创建启动脚本..."
+    echo "    创建启动脚本..."
     cat > run_backend.py << 'PYEND'
 #!/usr/bin/env python3
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-for p in ['venv/lib/python3.11/site-packages', 'venv/lib/python3.12/site-packages']:
-    sp = os.path.join(os.path.dirname(os.path.abspath(__file__)), p)
-    if os.path.exists(sp):
-        sys.path.insert(0, sp)
+# 添加用户 site-packages
+user_site = os.path.expanduser("~/.local/lib/python3.11/site-packages")
+if os.path.exists(user_site):
+    sys.path.insert(0, user_site)
+user_site2 = os.path.expanduser("~/.local/lib/python3.12/site-packages")
+if os.path.exists(user_site2):
+    sys.path.insert(0, user_site2)
 
 try:
     import uvicorn
@@ -215,6 +152,8 @@ try:
     uvicorn.run(app, host="0.0.0.0", port=8000)
 except ImportError as e:
     print(f"错误: {e}")
+    print("")
+    print("请先安装依赖: pip3 install --user -r requirements.txt")
     sys.exit(1)
 PYEND
     chmod +x run_backend.py
