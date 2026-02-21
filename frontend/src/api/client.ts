@@ -1,33 +1,22 @@
 /** Simple API client configuration */
-// Auto-detect API base URL from current window location
-function getApiBaseUrl(): string {
-  // Allow override via environment variable
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL
-  }
-  // Always use relative path - frontend and backend are served from same origin
-  return ''
-}
 
-const API_BASE_URL = getApiBaseUrl()
 const API_PREFIX = '/api/v1'
-
-const baseURL = API_BASE_URL + API_PREFIX
 
 // Timeout configuration: 120 seconds for write operations, 30 seconds for read
 const READ_TIMEOUT = 30000
 const WRITE_TIMEOUT = 120000
 
 export const apiClient = {
-  baseURL,
+  baseURL: API_PREFIX,
 
   async get<T>(endpoint: string): Promise<T> {
-    console.log('GET:', baseURL + endpoint)
+    const url = API_PREFIX + endpoint
+    console.log('GET:', url)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), READ_TIMEOUT)
 
     try {
-      const response = await fetch(baseURL + endpoint, {
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -44,12 +33,13 @@ export const apiClient = {
   },
 
   async post<T>(endpoint: string, data?: unknown): Promise<T> {
-    console.log('POST:', baseURL + endpoint, data)
+    const url = API_PREFIX + endpoint
+    console.log('POST:', url, data)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), WRITE_TIMEOUT)
 
     try {
-      const response = await fetch(baseURL + endpoint, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -67,12 +57,13 @@ export const apiClient = {
   },
 
   async put<T>(endpoint: string, data?: unknown): Promise<T> {
-    console.log('PUT:', baseURL + endpoint, data)
+    const url = API_PREFIX + endpoint
+    console.log('PUT:', url, data)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), WRITE_TIMEOUT)
 
     try {
-      const response = await fetch(baseURL + endpoint, {
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -90,12 +81,13 @@ export const apiClient = {
   },
 
   async delete<T>(endpoint: string): Promise<T> {
-    console.log('DELETE:', baseURL + endpoint)
+    const url = API_PREFIX + endpoint
+    console.log('DELETE:', url)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), WRITE_TIMEOUT)
 
     try {
-      const response = await fetch(baseURL + endpoint, {
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -112,12 +104,13 @@ export const apiClient = {
   },
 
   async patch<T>(endpoint: string, data?: unknown): Promise<T> {
-    console.log('PATCH:', baseURL + endpoint, data)
+    const url = API_PREFIX + endpoint
+    console.log('PATCH:', url, data)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), WRITE_TIMEOUT)
 
     try {
-      const response = await fetch(baseURL + endpoint, {
+      const response = await fetch(url, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
