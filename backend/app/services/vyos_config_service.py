@@ -2620,3 +2620,46 @@ class VyOSConfigService:
                         current_instance['description'] = match.group(1)
 
         return {'instances': openvpn_instances}
+
+    # === Static Route Configuration Methods ===
+
+    def add_static_route(self, destination: str, next_hop: str | None = None,
+                         interface: str | None = None, distance: int = 1,
+                         description: str | None = None) -> bool:
+        """Add a static route"""
+        session = VyOSConfigSession(self.ssh_client)
+        session.open()
+        session.enter_config_mode()
+        try:
+            base_cmd = f"set protocols static route {destination}"
+
+            if next_hop and interface:
+                session._send_and_sleep(f"{base_cmd} next-hop {next_hop}", 0.2)
+                session._send_and_sleep(f"{base_cmd} interface {interface}", 0.2)
+            elif next_hop:
+                session._send_and_sleep(f"{base_cmd} next-hop {next_hop}", 0.2)
+            elif interface:
+                session._send_and_sleep(f"{base_cmd} interface {interface}", 0.2)
+
+            if distance != 1:
+                session._send_and_sleep(f"{base_cmd} distance {distance}", 0.2)
+
+            if description:
+                session._send_and_sleep(f"{base_cmd} description '{description}'", 0.2)
+
+            result = session.commit(comment=f"Add static route {destination}")
+            return result
+        finally:
+            session.close()
+
+    def remove_static_route(self, destination: str) -> bool:
+        """Remove a static route"""
+        session = VyOSConfigSession(self.ssh_client)
+        session.open()
+        session.enter_config_mode()
+        try:
+            session._send_and_sleep(f"delete protocols static route {destination}", 0.3)
+            result = session.commit(comment=f"Remove static route {destination}")
+            return result
+        finally:
+            session.close()

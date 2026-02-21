@@ -379,7 +379,12 @@ export default function Routes() {
             <Form.Item
               label="Next Hop (Gateway)"
               name="next_hop"
-              rules={[{ validator: validateIPAddress }]}
+              rules={[{ validator: (_: any, value: string) => {
+                if (!value) {
+                  return Promise.resolve()
+                }
+                return validateIPAddress(_, value)
+              }}]}
               extra="Leave empty if using a directly connected network"
             >
               <Input placeholder="e.g., 192.168.1.254" />
@@ -388,7 +393,17 @@ export default function Routes() {
             <Form.Item
               label="Interface"
               name="interface"
-              rules={[{ required: true, message: 'Please select interface' }]}
+              dependencies={['next_hop']}
+              rules={[
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value && !getFieldValue('next_hop')) {
+                      return Promise.reject(new Error('Please provide either Next Hop or Interface'))
+                    }
+                    return Promise.resolve()
+                  },
+                }),
+              ]}
             >
               <Select placeholder="Select interface">
                 <Option value="eth0">eth0</Option>
