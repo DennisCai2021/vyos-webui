@@ -1,115 +1,89 @@
 #!/bin/bash
-# VyOS WebUI Post-Install Script
-
 set -e
 
-echo "VyOS WebUI - Post-Installation"
+WORKDIR="/opt/vyos-webui"
+BACKEND_DIR="$WORKDIR/backend"
+VENV_DIR="$BACKEND_DIR/venv"
+
+fix_venv() {
+    echo "Fixing venv for VyOS Python 3.11..."
+
+    cd "$BACKEND_DIR"
+
+    if [ -d "venv" ]; then
+        # Update pyvenv.cfg (like deploy.sh)
+        cat > venv/pyvenv.cfg << 'CFGEOF'
+home = /usr/bin
+include-system-site-packages = false
+version = 3.11.2
+CFGEOF
+        # Fix symlinks
+        cd venv/bin
+        rm -f python python3 python3.12
+        ln -sf /usr/bin/python3 python
+        ln -sf /usr/bin/python3 python3
+        if [ -x /usr/bin/python3.11 ]; then
+            ln -sf /usr/bin/python3.11 python3.11
+        fi
+        # Fix shebangs in all scripts
+        for f in *; do
+            if [ -f "$f" ] && [ -x "$f" ]; then
+                head -n 1 "$f" | grep -q "^#!" && sed -i '1s|^#!.*python.*|#!/usr/bin/python3|' "$f" 2>/dev/null || true
+            fi
+        done
+        cd ../..
+    fi
+
+    # Create .env file
+    if [ ! -f "$BACKEND_DIR/.env" ]; then
+        cat > "$BACKEND_DIR/.env" << 'EOF'
+VYOS_HOST=127.0.0.1
+VYOS_PORT=22
+VYOS_USERNAME=vyos
+VYOS_PASSWORD=vyos
+VYOS_TIMEOUT=30
+EOF
+    fi
+
+    echo "venv fix complete."
+}
 
 case "$1" in
     configure)
-        # Create user if not exists
-        if ! getent passwd vyos-webui > /dev/null; then
-            echo "Creating vyos-webui user..."
-            useradd -r -s /usr/sbin/nologin -d /opt/vyos-webui vyos-webui
-        fi
+        # Fix the venv (like deploy.sh)
+        fix_venv
 
-        # Create required directories
-        echo "Creating directories..."
-        mkdir -p /opt/vyos-webui
-        mkdir -p /etc/vyos-webui/ssl
-        mkdir -p /var/log/vyos-webui
-        mkdir -p /config/vyos-webui
-
-        # Set ownership
-        chown -R vyos-webui:vyos-webui /opt/vyos-webui
-        chown -R vyos-webui:vyos-webui /etc/vyos-webui
-        chown -R vyos-webui:vyos-webui /var/log/vyos-webui
-        chown -R vyos-webui:vyos-webui /config/vyos-webui
-
-        # Set permissions
-        chmod 750 /etc/vyos-webui
-        chmod 700 /etc/vyos-webui/ssl
-        chmod 750 /var/log/vyos-webui
-        chmod 750 /config/vyos-webui
-
-        # Create Python virtual environment
-        echo "Setting up Python environment..."
-        if [ ! -d /opt/vyos-webui/venv ]; then
-            python3 -m venv /opt/vyos-webui/venv
-        fi
-
-        # Install Python dependencies
-        if [ -f /opt/vyos-webui/requirements.txt ]; then
-            /opt/vyos-webui/venv/bin/pip install -r /opt/vyos-webui/requirements.txt
-        fi
-
-        # Generate self-signed certificate if needed
-        if [ ! -f /etc/vyos-webui/ssl/cert.pem ] || [ ! -f /etc/vyos-webui/ssl/key.pem ]; then
-            echo "Generating self-signed SSL certificate..."
-            openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-                -keyout /etc/vyos-webui/ssl/key.pem \
-                -out /etc/vyos-webui/ssl/cert.pem \
-                -subj "/C=US/ST=Local/L=Local/O=VyOS/OU=WebUI/CN=vyos-webui" 2>/dev/null || true
-
-            chmod 600 /etc/vyos-webui/ssl/key.pem
-            chmod 644 /etc/vyos-webui/ssl/cert.pem
-            chown -R vyos-webui:vyos-webui /etc/vyos-webui/ssl
-        fi
-
-        # Enable nginx site
-        if [ -f /etc/nginx/sites-available/vyos-webui ]; then
-            echo "Configuring nginx..."
-            mkdir -p /etc/nginx/sites-enabled
-            if [ ! -L /etc/nginx/sites-enabled/vyos-webui ]; then
-                ln -sf /etc/nginx/sites-available/vyos-webui /etc/nginx/sites-enabled/
-            fi
-            # Remove default nginx site if exists
-            rm -f /etc/nginx/sites-enabled/default
-        fi
+        # Set permissions - vyos user, users group
+        chown -R vyos:users /opt/vyos-webui 2>/dev/null || true
+        chmod +x /opt/vyos-webui/vyos-webui-wrapper
+        chmod +x /opt/vyos-webui/start.sh
+        chmod +x /opt/vyos-webui/stop.sh
+        chmod +x /opt/vyos-webui/status.sh
+        chmod 600 /etc/vyos-webui/config.env 2>/dev/null || true
 
         # Reload systemd
-        echo "Reloading systemd..."
-        systemctl daemon-reload
-
-        # Enable services
-        echo "Enabling services..."
-        systemctl enable vyos-webui || true
-        systemctl enable nginx || true
-
-        # Reload nginx
-        if systemctl is-active --quiet nginx; then
-            echo "Reloading nginx..."
-            systemctl reload nginx || true
-        else
-            echo "Starting nginx..."
-            systemctl start nginx || true
-        fi
-
-        # Start WebUI service
-        echo "Starting vyos-webui service..."
-        systemctl start vyos-webui || true
+        systemctl daemon-reload || true
 
         echo ""
-        echo "=========================================="
-        echo "VyOS WebUI installed successfully!"
-        echo "=========================================="
+        echo "========================================="
+        echo "  VyOS Web UI installed successfully!"
+        echo "========================================="
         echo ""
-        echo "Access the WebUI at: https://$(hostname -I | awk '{print $1}')"
+        echo "方式一: 使用 systemd（推荐）"
+        echo "  sudo systemctl start vyos-webui"
+        echo "  sudo systemctl enable vyos-webui"
         echo ""
-        echo "To configure via VyOS CLI:"
-        echo "  configure"
-        echo "  set service vyos-webui enabled"
-        echo "  commit"
-        echo "  save"
+        echo "方式二: 使用脚本（与 deploy.sh 一致）"
+        echo "  cd /opt/vyos-webui && ./start.sh"
+        echo "  cd /opt/vyos-webui && ./stop.sh"
+        echo "  cd /opt/vyos-webui && ./status.sh"
+        echo ""
+        echo "访问地址: http://<your-vyos-ip>:8000"
+        echo "默认登录: vyos / vyos"
         echo ""
         ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
-        ;;
-
-    *)
-        echo "postinst called with unknown argument \`$1'" >&2
-        exit 1
         ;;
 esac
 

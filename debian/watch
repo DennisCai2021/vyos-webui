@@ -1,3 +1,0 @@
-version=4
-opts="filenamemangle=s/(?:.*?)?v?(\d[\d.]*)\.tar\.gz/vyos-webui-$1.tar.gz" \
-  https://github.com/vyos-webui/vyos-webui/tags .*/v?(\d\S*)\.tar\.gz

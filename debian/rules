@@ -1,43 +1,39 @@
 #!/usr/bin/make -f
 
 %:
-	dh $@ --with python3 --buildsystem=pybuild
+	dh $@
 
 override_dh_auto_build:
 	# Build frontend
 	cd frontend && npm install && npm run build
-	# Copy frontend build to backend static dir
-	mkdir -p backend/app/static
-	cp -r frontend/dist/* backend/app/static/
-	dh_auto_build
+	# Download Python dependencies for offline installation
+	cd backend && mkdir -p vendor
+	rm -rf backend/vendor/*
+	pip3.11 download -d backend/vendor -r backend/requirements.txt
 
 override_dh_auto_clean:
 	cd frontend && rm -rf node_modules dist
-	rm -rf backend/app/static
-	dh_auto_clean
+	rm -rf backend/vendor
 
 override_dh_install:
 	dh_install
-	# Install backend
+	# Install base directory
 	install -d $(DESTDIR)/opt/vyos-webui
-	cp -r backend/* $(DESTDIR)/opt/vyos-webui/
-	# Install frontend
-	install -d $(DESTDIR)/opt/vyos-webui/static
-	cp -r frontend/dist/* $(DESTDIR)/opt/vyos-webui/static/
+	# Install backend in backend/ subdir (like deploy.sh)
+	install -d $(DESTDIR)/opt/vyos-webui/backend
+	cp -r backend/* $(DESTDIR)/opt/vyos-webui/backend/
+	# Install frontend static files in frontend/dist/
+	install -d $(DESTDIR)/opt/vyos-webui/frontend/dist
+	cp -r frontend/dist/* $(DESTDIR)/opt/vyos-webui/frontend/dist/
 	# Install systemd service
 	install -d $(DESTDIR)/lib/systemd/system
 	install -m 644 debian/vyos-webui.service $(DESTDIR)/lib/systemd/system/
-	# Install nginx config
-	install -d $(DESTDIR)/etc/nginx/sites-available
-	install -m 644 debian/vyos-webui.nginx $(DESTDIR)/etc/nginx/sites-available/vyos-webui
-	# Install configuration directory
+	# Install configuration
 	install -d $(DESTDIR)/etc/vyos-webui
 	install -m 600 debian/vyos-webui.conf $(DESTDIR)/etc/vyos-webui/config.env
-	# Install sudoers config
-	install -d $(DESTDIR)/etc/sudoers.d
-	install -m 440 debian/vyos-webui.sudoers $(DESTDIR)/etc/sudoers.d/vyos-webui
-	# Install VyOS config scripts
-	install -d $(DESTDIR)/usr/libexec/vyos/conf_mode
-	install -m 755 debian/vyos-webui-conf-mode.py $(DESTDIR)/usr/libexec/vyos/conf_mode/vyos-webui.py
-	install -d $(DESTDIR)/usr/share/vyos
-	install -m 644 debian/vyos-webui-node.def $(DESTDIR)/usr/share/vyos/vyos-webui-node.def
+	# Install helper scripts
+	install -m 755 debian/vyos-webui-wrapper $(DESTDIR)/opt/vyos-webui/
+	# Also install start/stop/status scripts like deploy.sh
+	install -m 755 debian/start.sh $(DESTDIR)/opt/vyos-webui/
+	install -m 755 debian/stop.sh $(DESTDIR)/opt/vyos-webui/
+	install -m 755 debian/status.sh $(DESTDIR)/opt/vyos-webui/

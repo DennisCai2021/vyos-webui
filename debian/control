@@ -2,15 +2,14 @@ Source: vyos-webui
 Section: admin
 Priority: optional
 Maintainer: VyOS WebUI Team <team@vyos-webui.local>
-Build-Depends: debhelper-compat (= 13), dh-python, python3-setuptools, python3-all, nodejs, npm
+Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.5.1
 Homepage: https://github.com/vyos-webui/vyos-webui
 Rules-Requires-Root: no
 
 Package: vyos-webui
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}, python3-fastapi, python3-uvicorn, python3-paramiko, python3-loguru, python3-pydantic, python3-jose[cryptography], python3-passlib[bcrypt], python3-aiofiles, nginx
+Depends: ${misc:Depends}, python3.11
 Description: Web-based administration interface for VyOS
  A Fortigate-like web interface for managing VyOS routers.
- Provides configuration management, monitoring, and diagnostics
- through an intuitive web UI.
+ Fully offline installation with all dependencies bundled.

@@ -1,9 +1,7 @@
-vyos-webui (1.0.0-1) unstable; urgency=medium
+vyos-webui (0.0.1-1) unstable; urgency=medium
 
-  * Initial release
-  * Basic Web UI for VyOS management
-  * Network, firewall, and VPN configuration
-  * System monitoring and logging
-  * User and permission management
+  * Initial release for VyOS 1.4 with Python 3.11
+  * Fully offline installation package
+  * Includes all dependencies bundled
 
- -- VyOS WebUI Team <team@vyos-webui.local>  Sun, 15 Feb 2026 00:00:00 +0000
+ -- VyOS WebUI Team <team@vyos-webui.local>  $(date -R)

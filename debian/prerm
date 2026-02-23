@@ -1,51 +1,15 @@
 #!/bin/bash
-# VyOS WebUI Pre-Removal Script
-
 set -e
 
-echo "VyOS WebUI - Pre-Removal"
-
 case "$1" in
-    remove|deconfigure)
-        # Stop the service
+    remove|upgrade|deconfigure)
+        # Stop service
         if systemctl is-active --quiet vyos-webui 2>/dev/null; then
-            echo "Stopping vyos-webui service..."
-            systemctl stop vyos-webui || true
-        fi
-
-        # Disable the service
-        if systemctl is-enabled --quiet vyos-webui 2>/dev/null; then
-            echo "Disabling vyos-webui service..."
-            systemctl disable vyos-webui || true
-        fi
-
-        # Remove nginx site symlink
-        if [ -L /etc/nginx/sites-enabled/vyos-webui ]; then
-            echo "Removing nginx site configuration..."
-            rm -f /etc/nginx/sites-enabled/vyos-webui
-
-            # Reload nginx
-            if systemctl is-active --quiet nginx; then
-                echo "Reloading nginx..."
-                systemctl reload nginx || true
-            fi
-        fi
-        ;;
-
-    upgrade)
-        # Stop service before upgrade
-        if systemctl is-active --quiet vyos-webui 2>/dev/null; then
-            echo "Stopping vyos-webui service for upgrade..."
             systemctl stop vyos-webui || true
         fi
         ;;
 
     failed-upgrade)
-        ;;
-
-    *)
-        echo "prerm called with unknown argument \`$1'" >&2
-        exit 1
         ;;
 esac
 

@@ -1,55 +1,14 @@
 #!/bin/bash
-# VyOS WebUI Pre-Install Script
-
 set -e
 
-echo "VyOS WebUI - Pre-Installation"
+case "$1" in
+    install|upgrade)
+        # Create user if not exists
+        if ! getent passwd vyos > /dev/null; then
+            # VyOS user should already exist on VyOS systems
+            true
+        fi
+        ;;
+esac
 
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then
-    echo "Error: This script must be run as root"
-    exit 1
-fi
-
-# Check VyOS version
-if [ -f /etc/issue ]; then
-    VYOS_VERSION=$(cat /etc/issue | grep -oP 'VyOS \K[0-9.]+' || true)
-    if [ -n "$VYOS_VERSION" ]; then
-        echo "Detected VyOS version: $VYOS_VERSION"
-    fi
-fi
-
-# Check Python version
-if ! command -v python3 &> /dev/null; then
-    echo "Error: Python 3 is required"
-    exit 1
-fi
-
-PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-echo "Detected Python version: $PYTHON_VERSION"
-
-# Check if user exists
-if ! getent passwd vyos-webui > /dev/null; then
-    echo "Creating vyos-webui user..."
-    useradd -r -s /usr/sbin/nologin -d /opt/vyos-webui vyos-webui
-fi
-
-# Check required directories
-REQUIRED_DIRS=(
-    "/config"
-    "/usr/libexec/vyos"
-)
-
-for dir in "${REQUIRED_DIRS[@]}"; do
-    if [ ! -d "$dir" ]; then
-        echo "Warning: Required directory $dir does not exist"
-    fi
-done
-
-# Stop existing service if running
-if systemctl is-active --quiet vyos-webui 2>/dev/null; then
-    echo "Stopping existing vyos-webui service..."
-    systemctl stop vyos-webui || true
-fi
-
-echo "Pre-installation checks completed successfully"
+exit 0

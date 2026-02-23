@@ -1,0 +1,28 @@
+#!/bin/bash
+# VyOS Web UI Wrapper - Runs the service with venv
+
+set -e
+
+WORKDIR="/opt/vyos-webui"
+BACKEND_DIR="$WORKDIR/backend"
+cd "$BACKEND_DIR"
+
+VENV_DIR="$BACKEND_DIR/venv"
+
+# Activate and run
+source "$VENV_DIR/bin/activate"
+
+# Ensure .env exists in backend dir
+if [ ! -f "$BACKEND_DIR/.env" ]; then
+    cat > "$BACKEND_DIR/.env" << 'EOF'
+VYOS_HOST=127.0.0.1
+VYOS_PORT=22
+VYOS_USERNAME=vyos
+VYOS_PASSWORD=vyos
+VYOS_TIMEOUT=30
+EOF
+fi
+
+# Run uvicorn from backend dir (matches deploy.sh
+cd "$BACKEND_DIR"
+exec python -m uvicorn main:app --host 0.0.0.0 --port 8000

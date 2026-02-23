@@ -4,6 +4,11 @@ A modern web management interface for VyOS routers, developed with Claude Code a
 
 [中文文档 (Chinese Documentation)](README_CN.md)
 
+## Compatibility
+
+- **Compatible with VyOS 1.4** (with Python 3.11)
+- Other versions have not been tested. If you encounter any bugs, please submit an issue.
+
 ## Project Overview
 
 This project provides a modern web management interface for VyOS routers, supporting real VyOS device connection and configuration management.
@@ -170,6 +175,56 @@ cd /opt/vyos-webui
 ./start.sh   # Start services
 ./stop.sh    # Stop services
 ./status.sh  # Check status
+```
+
+## DEB Package Installation (Offline)
+
+A fully offline DEB package is available for VyOS 1.4.
+
+### Install DEB Package
+
+```bash
+# 1. Copy DEB package to VyOS
+scp vyos-webui_0.0.1-1_all.deb vyos@<vyos-ip>:/tmp/
+
+# 2. Install on VyOS
+ssh vyos@<vyos-ip>
+sudo dpkg -i /tmp/vyos-webui_0.0.1-1_all.deb
+
+# 3. Start service
+# Option 1: systemd (recommended)
+sudo systemctl start vyos-webui
+sudo systemctl enable vyos-webui  # Auto-start on boot
+
+# Option 2: Script (same as deploy.sh)
+cd /opt/vyos-webui
+./start.sh
+```
+
+### Modify VyOS SSH Configuration
+
+Edit the configuration file:
+
+```bash
+sudo vi /opt/vyos-webui/backend/.env
+```
+
+Configuration options:
+
+```env
+VYOS_HOST=127.0.0.1       # VyOS host address
+VYOS_PORT=22                # SSH port
+VYOS_USERNAME=vyos          # SSH username
+VYOS_PASSWORD=vyos          # SSH password
+VYOS_TIMEOUT=30             # Timeout in seconds
+```
+
+After modifying, restart the service:
+
+```bash
+cd /opt/vyos-webui && ./stop.sh && ./start.sh
+# or
+sudo systemctl restart vyos-webui
 ```
 
 ## API Endpoints

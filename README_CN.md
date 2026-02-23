@@ -4,6 +4,11 @@
 
 [English Documentation](README.md)
 
+## 兼容性说明
+
+- **兼容 VyOS 1.4 版本**（自带 Python 3.11）
+- 其他版本未经过测试，如遇到 bug 可通过 issue 反馈
+
 ## 项目概述
 
 本项目为 VyOS 路由器提供一个现代化的 Web 管理界面，支持真实的 VyOS 设备连接和配置管理。
@@ -170,6 +175,56 @@ cd /opt/vyos-webui
 ./start.sh   # 启动服务
 ./stop.sh    # 停止服务
 ./status.sh  # 查看状态
+```
+
+## DEB 包安装（完全离线）
+
+提供适用于 VyOS 1.4 的完全离线 DEB 安装包。
+
+### 安装 DEB 包
+
+```bash
+# 1. 复制 DEB 包到 VyOS
+scp vyos-webui_0.0.1-1_all.deb vyos@<vyos-ip>:/tmp/
+
+# 2. 在 VyOS 上安装
+ssh vyos@<vyos-ip>
+sudo dpkg -i /tmp/vyos-webui_0.0.1-1_all.deb
+
+# 3. 启动服务
+# 方式一: systemd（推荐）
+sudo systemctl start vyos-webui
+sudo systemctl enable vyos-webui  # 开机自启
+
+# 方式二: 脚本（与 deploy.sh 一致）
+cd /opt/vyos-webui
+./start.sh
+```
+
+### 修改 VyOS SSH 连接配置
+
+编辑配置文件：
+
+```bash
+sudo vi /opt/vyos-webui/backend/.env
+```
+
+配置项说明：
+
+```env
+VYOS_HOST=127.0.0.1       # VyOS 主机地址
+VYOS_PORT=22                # SSH 端口
+VYOS_USERNAME=vyos          # SSH 用户名
+VYOS_PASSWORD=vyos          # SSH 密码
+VYOS_TIMEOUT=30             # 超时时间（秒）
+```
+
+修改后重启服务：
+
+```bash
+cd /opt/vyos-webui && ./stop.sh && ./start.sh
+# 或
+sudo systemctl restart vyos-webui
 ```
 
 ## API 端点
